@@ -1,21 +1,26 @@
 package com.hf.app.utils;
 
 
+import org.apache.commons.compress.archivers.ArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.io.IOUtils;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.hyperledger.fabric.sdk.Enrollment;
+import org.hyperledger.fabric.sdk.helper.Utils;
 import org.hyperledger.fabric.sdk.identity.X509Enrollment;
 import org.springframework.data.util.Pair;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.Reader;
-import java.io.StringReader;
+import java.io.*;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Collection;
 
 import static java.lang.String.format;
 
@@ -75,5 +80,49 @@ public class CryptoUtils {
 
         return matches[0];
 
+    }
+
+
+    public static InputStream generateTarGzInputStream(File src, String pathPrefix) throws IOException {
+        File sourceDirectory = src;
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream(500000);
+
+        String sourcePath = sourceDirectory.getAbsolutePath();
+
+        TarArchiveOutputStream archiveOutputStream = new TarArchiveOutputStream(new GzipCompressorOutputStream(new BufferedOutputStream(bos)));
+        archiveOutputStream.setLongFileMode(TarArchiveOutputStream.LONGFILE_GNU);
+
+        try {
+            Collection<File> childrenFiles = org.apache.commons.io.FileUtils.listFiles(sourceDirectory, null, true);
+
+            ArchiveEntry archiveEntry;
+            FileInputStream fileInputStream;
+            for (File childFile : childrenFiles) {
+                String childPath = childFile.getAbsolutePath();
+                String relativePath = childPath.substring((sourcePath.length() + 1), childPath.length());
+
+                if (pathPrefix != null) {
+                    relativePath = Utils.combinePaths(pathPrefix, relativePath);
+                }
+
+                relativePath = FilenameUtils.separatorsToUnix(relativePath);
+
+                archiveEntry = new TarArchiveEntry(childFile, relativePath);
+                fileInputStream = new FileInputStream(childFile);
+                archiveOutputStream.putArchiveEntry(archiveEntry);
+
+                try {
+                    IOUtils.copy(fileInputStream, archiveOutputStream);
+                } finally {
+                    IOUtils.closeQuietly(fileInputStream);
+                    archiveOutputStream.closeArchiveEntry();
+                }
+            }
+        } finally {
+            IOUtils.closeQuietly(archiveOutputStream);
+        }
+
+        return new ByteArrayInputStream(bos.toByteArray());
     }
 }

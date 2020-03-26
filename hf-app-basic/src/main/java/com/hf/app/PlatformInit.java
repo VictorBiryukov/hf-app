@@ -6,6 +6,8 @@ import com.hf.app.persistence.repositories.OrganizationRepository;
 import com.hf.app.persistence.repositories.UserRepository;
 import org.apache.commons.io.IOUtils;
 import org.hyperledger.fabric.sdk.*;
+import org.hyperledger.fabric.sdk.exception.ChaincodeEndorsementPolicyParseException;
+import org.hyperledger.fabric.sdk.exception.ExecuteException;
 import org.hyperledger.fabric.sdk.exception.ProposalException;
 import org.hyperledger.fabric.sdk.exception.TransactionException;
 import org.hyperledger.fabric_ca.sdk.HFCAClient;
@@ -56,7 +58,17 @@ public class PlatformInit {
 
     private static final String LOCAL_PATH = "hf-app-basic/src/test/fixture/docker-up";
     private static final String CHANNEL_NAME = "foo";
+
+    private static final String CHAIN_CODE_FILEPATH = "/gocc/sample1";
+    private static final String CHAIN_CODE_NAME = "example_cc_go";
+    private static final String CHAIN_CODE_PATH = "github.com/example_cc";
     private static final String CHAIN_CODE_VERSION = "1";
+    private static final String CHAIN_CODE_META_PATH = "/meta-infs";
+
+    private static final long PROPOSALWAITTIME = 120000L;
+    private static final long DEPLOYWAITTIME = 120000L;
+
+    TransactionRequest.Type CHAIN_CODE_LANG = TransactionRequest.Type.GO_LANG;
 
 
     private Orderer orderer;
@@ -103,6 +115,10 @@ public class PlatformInit {
         initOrderer();
         initPeer();
         constructChannel();
+        loadAndInstantiateCC();
+
+        add("X1");
+        add("X1");
     }
 
     @Autowired
@@ -159,7 +175,7 @@ public class PlatformInit {
                     organizationRepository.findByName(myOrgName),
                     userEnrollment,
                     null,
-                    null,
+                    myOrgMspId,
                     null,
                     myOrgUserAffiliation
             );
@@ -250,7 +266,7 @@ public class PlatformInit {
         String path = LOCAL_PATH + "/" + CHANNEL_NAME + ".tx";
         ChannelConfiguration channelConfiguration = new ChannelConfiguration(new File(path));
 
-        Channel mainChannel = hfClient.newChannel(
+        mainChannel = hfClient.newChannel(
                 CHANNEL_NAME,
                 orderer,
                 channelConfiguration,
@@ -267,24 +283,91 @@ public class PlatformInit {
     }
 
 
-    private void loadCC(String ccPath) throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException {
+    private ChaincodeID getChaincodeID() {
 
-
-        final ChaincodeID chaincodeID;
-
-
-        ChaincodeID.Builder chaincodeIDBuilder = ChaincodeID.newBuilder().setName(ccPath)
+        ChaincodeID.Builder chaincodeIDBuilder = ChaincodeID.newBuilder().setName(CHAIN_CODE_NAME)
                 .setVersion(CHAIN_CODE_VERSION);
-            chaincodeIDBuilder.setPath(ccPath);
-        chaincodeID = chaincodeIDBuilder.build();
+        chaincodeIDBuilder.setPath(CHAIN_CODE_PATH);
+
+        return chaincodeIDBuilder.build();
+
+
+    }
+
+    private void loadAndInstantiateCC() throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException, IOException, ProposalException, ChaincodeEndorsementPolicyParseException {
 
         Collection<ProposalResponse> responses;
-        Collection<ProposalResponse> successful = new LinkedList<>();
-        Collection<ProposalResponse> failed = new LinkedList<>();
+
 
         hfClient.setUserContext(userRepository.findByName(myOrgPeerAdminName));
+
         InstallProposalRequest installProposalRequest = hfClient.newInstallProposalRequest();
-        installProposalRequest.setChaincodeID(chaincodeID);
+        installProposalRequest.setChaincodeID(getChaincodeID());
+
+        installProposalRequest.setChaincodeSourceLocation(Paths.get(LOCAL_PATH, CHAIN_CODE_FILEPATH).toFile());
+
+        installProposalRequest.setChaincodeMetaInfLocation(new File(LOCAL_PATH + CHAIN_CODE_META_PATH));
+
+        installProposalRequest.setChaincodeVersion(CHAIN_CODE_VERSION);
+        installProposalRequest.setChaincodeLanguage(CHAIN_CODE_LANG);
+
+        responses = hfClient.sendInstallProposal(installProposalRequest, mainChannel.getPeers());
+
+        for (ProposalResponse response : responses) {
+            if (response.getStatus() == ProposalResponse.Status.SUCCESS) {
+
+            } else {
+                throw new ProposalException("Proposal request to peer failed!");
+            }
+        }
+
+
+        ///////////////
+        /// Send instantiation transaction to all peers
+        //// Instantiate chaincode.
+        InstantiateProposalRequest instantiateProposalRequest = hfClient.newInstantiationProposalRequest();
+        instantiateProposalRequest.setProposalWaitTime(DEPLOYWAITTIME);
+        instantiateProposalRequest.setChaincodeID(getChaincodeID());
+        instantiateProposalRequest.setChaincodeLanguage(CHAIN_CODE_LANG);
+        instantiateProposalRequest.setFcn("init");
+        instantiateProposalRequest.setArgs("NONE");
+
+        ChaincodeEndorsementPolicy chaincodeEndorsementPolicy = new ChaincodeEndorsementPolicy();
+        chaincodeEndorsementPolicy.fromYamlFile(new File(LOCAL_PATH + "//chaincodeendorsementpolicy.yaml"));
+        instantiateProposalRequest.setChaincodeEndorsementPolicy(chaincodeEndorsementPolicy);
+
+        responses = mainChannel.sendInstantiationProposal(instantiateProposalRequest, mainChannel.getPeers());
+
+
+        for (ProposalResponse response : responses) {
+            if (response.isVerified() && response.getStatus() == ProposalResponse.Status.SUCCESS) {
+            } else {
+                throw new ExecuteException(response.getMessage());
+            }
+        }
+    }
+
+
+    private void add(String name) throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException, ProposalException {
+        hfClient.setUserContext(userRepository.findByName(myOrgPeerAdminName));
+
+        ///////////////
+        /// Send transaction proposal to all peers
+        TransactionProposalRequest transactionProposalRequest = hfClient.newTransactionProposalRequest();
+        transactionProposalRequest.setChaincodeID(getChaincodeID());
+        transactionProposalRequest.setChaincodeLanguage(CHAIN_CODE_LANG);
+        transactionProposalRequest.setFcn("add");
+        transactionProposalRequest.setProposalWaitTime(PROPOSALWAITTIME);
+        transactionProposalRequest.setArgs(name);
+
+        Collection<ProposalResponse> transactionPropResp = mainChannel.sendTransactionProposal(transactionProposalRequest, mainChannel.getPeers());
+        for (ProposalResponse response : transactionPropResp) {
+            if (response.getStatus() == ProposalResponse.Status.SUCCESS) {
+
+            } else {
+                throw new ExecuteException(response.getMessage());
+            }
+        }
 
     }
 
