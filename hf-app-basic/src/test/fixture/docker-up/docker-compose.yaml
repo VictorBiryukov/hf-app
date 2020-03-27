@@ -84,3 +84,10 @@ services:
     depends_on:
       - orderer.example.com
     container_name: peer0.org1.example.com
+
+  configtxlator:
+    image: hyperledger/fabric-tools${IMAGE_TAG_FABRIC}
+    ports:
+      - "7059:7059"
+    command: /usr/local/bin/configtxlator start
+    container_name: configtxlator
