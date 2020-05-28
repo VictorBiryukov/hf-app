@@ -11,4 +11,10 @@ public class MainController {
         return "checkOrSaveStudentName";
     }
 
+    @RequestMapping(value = "/")
+    public String index() {
+        return "index";
+    }
+
+
 }

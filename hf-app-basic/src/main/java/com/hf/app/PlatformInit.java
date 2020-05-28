@@ -1,8 +1,12 @@
 package com.hf.app;
 
 import com.hf.app.persistence.entities.Organization;
+import com.hf.app.persistence.entities.StoredChannel;
+import com.hf.app.persistence.entities.Student;
 import com.hf.app.persistence.entities.User;
 import com.hf.app.persistence.repositories.OrganizationRepository;
+import com.hf.app.persistence.repositories.StoredChannelRepository;
+import com.hf.app.persistence.repositories.StudentRepository;
 import com.hf.app.persistence.repositories.UserRepository;
 import org.apache.commons.io.IOUtils;
 import org.hyperledger.fabric.sdk.*;
@@ -49,6 +53,10 @@ public class PlatformInit {
 
     private final OrganizationRepository organizationRepository;
     private final UserRepository userRepository;
+    private final StoredChannelRepository storedChannelRepository;
+    private final StudentRepository studentRepository;
+
+
 
     private final String myOrgName;
     private final String myOrgMspId;
@@ -90,6 +98,8 @@ public class PlatformInit {
 
     public PlatformInit(OrganizationRepository organizationRepository,
                         UserRepository userRepository,
+                        StoredChannelRepository storedChannelRepository,
+                        StudentRepository studentRepository,
                         Environment environment,
                         @Value("${org.name}") String myOrgName,
                         @Value("${org.mspid}") String myOrgMspId,
@@ -104,6 +114,8 @@ public class PlatformInit {
 
         this.organizationRepository = organizationRepository;
         this.userRepository = userRepository;
+        this.storedChannelRepository = storedChannelRepository;
+        this.studentRepository = studentRepository;
         this.environment = environment;
         this.myOrgName = myOrgName;
         this.myOrgMspId = myOrgMspId;
@@ -123,12 +135,20 @@ public class PlatformInit {
         initMyOrgUser();
         initMyOrgPeerAdmin();
         initOrderer();
-//        initPeer();
-        constructChannel();
+        initMyOrgPeer();
+        initAllyOrgPeer();
+        getOrConstructChannel(CHANNEL_NAME);
         loadAndInstantiateCC();
 
-        add("X1");
-        add("X1");
+        studentRepository.save(new Student("Jon", "Jones", "Bones"));
+        studentRepository.save(new Student("Dominick", "Reyes", "The Devastator"));
+        studentRepository.save(new Student("Thiago", "Santos", "Maretta"));
+        studentRepository.save(new Student("Jan", "Blachowicz", "Prince of Cieszyn"));
+        studentRepository.save(new Student("Glover", "Teixeira", "Brazilian"));
+        studentRepository.save(new Student("Anthony", "Smith", "Lionheart"));
+
+
+
     }
 
     @Autowired
@@ -251,39 +271,63 @@ public class PlatformInit {
     }
 
 
-    private void initPeer() throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException {
+    private void initMyOrgPeer() throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException {
 
         String peerName = environment.getProperty("org.peer.name");
         String peerLocation = environment.getProperty("org.peer.location");
 
         Properties peerProperties = new Properties();
 
-        peerProperties.setProperty("clientCertFile", LOCAL_PATH + environment.getProperty("org.peer.clientCertFile"));
+/*        peerProperties.setProperty("clientCertFile", LOCAL_PATH + environment.getProperty("org.peer.clientCertFile"));
         peerProperties.setProperty("sslProvider", environment.getProperty("org.peer.sslProvider"));
         peerProperties.setProperty("negotiationType", environment.getProperty("org.peer.negotiationType"));
         peerProperties.setProperty("hostnameOverride", environment.getProperty("org.peer.hostnameOverride"));
         peerProperties.setProperty("pemFile", LOCAL_PATH + environment.getProperty("org.peer.pemFile"));
-        peerProperties.setProperty("clientKeyFile", LOCAL_PATH + environment.getProperty("org.peer.clientKeyFile"));
+        peerProperties.setProperty("clientKeyFile", LOCAL_PATH + environment.getProperty("org.peer.clientKeyFile"));*/
 
         peerProperties.put("grpc.NettyChannelBuilderOption.maxInboundMessageSize", 9000000);
 
         peers.add(hfClient.newPeer(peerName, peerLocation, peerProperties));
+    }
 
+    private void initAllyOrgPeer() throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException {
+
+        String peerName = environment.getProperty("ally.peer.name");
+        String peerLocation = environment.getProperty("ally.peer.location");
+
+        Properties peerProperties = new Properties();
+
+/*        peerProperties.setProperty("clientCertFile", LOCAL_PATH + environment.getProperty("org.peer.clientCertFile"));
+        peerProperties.setProperty("sslProvider", environment.getProperty("org.peer.sslProvider"));
+        peerProperties.setProperty("negotiationType", environment.getProperty("org.peer.negotiationType"));
+        peerProperties.setProperty("hostnameOverride", environment.getProperty("org.peer.hostnameOverride"));
+        peerProperties.setProperty("pemFile", LOCAL_PATH + environment.getProperty("org.peer.pemFile"));
+        peerProperties.setProperty("clientKeyFile", LOCAL_PATH + environment.getProperty("org.peer.clientKeyFile"));*/
+
+        peerProperties.put("grpc.NettyChannelBuilderOption.maxInboundMessageSize", 9000000);
+
+        peers.add(hfClient.newPeer(peerName, peerLocation, peerProperties));
     }
 
 
-    private void constructChannel() throws IOException, org.hyperledger.fabric.sdk.exception.InvalidArgumentException, TransactionException, ProposalException {
-        String path = LOCAL_PATH + "/" + CHANNEL_NAME + ".tx";
-        ChannelConfiguration channelConfiguration = new ChannelConfiguration(new File(path));
-
-        mainChannel = hfClient.newChannel(
-                CHANNEL_NAME,
-                orderer,
-                channelConfiguration,
-                hfClient.getChannelConfigurationSignature(channelConfiguration, userRepository.findByName(myOrgPeerAdminName))
-        );
+    private void getOrConstructChannel(String channelName) throws IOException, org.hyperledger.fabric.sdk.exception.InvalidArgumentException, TransactionException, ProposalException, ClassNotFoundException {
 
 
+        StoredChannel storedChannel = storedChannelRepository.findByName(channelName);
+
+
+        if (storedChannel == null) {
+            String path = LOCAL_PATH + "/" + channelName + ".tx";
+            ChannelConfiguration channelConfiguration = new ChannelConfiguration(new File(path));
+
+            mainChannel = hfClient.newChannel(
+                    channelName,
+                    orderer,
+                    channelConfiguration,
+                    hfClient.getChannelConfigurationSignature(channelConfiguration, userRepository.findByName(myOrgPeerAdminName))
+            );
+
+/*
         String peerName = environment.getProperty("org.peer.name");
         String peerLocation = environment.getProperty("org.peer.location");
 
@@ -299,14 +343,22 @@ public class PlatformInit {
         peerProperties.put("grpc.NettyChannelBuilderOption.maxInboundMessageSize", 9000000);
 
         peers.add(hfClient.newPeer(peerName, peerLocation, peerProperties));
+*/
+            for (Peer peer : peers) {
+                mainChannel.joinPeer(peer, createPeerOptions().setPeerRoles(EnumSet.of(Peer.PeerRole.ENDORSING_PEER, Peer.PeerRole.LEDGER_QUERY, Peer.PeerRole.CHAINCODE_QUERY, Peer.PeerRole.EVENT_SOURCE)));
 
-        for (Peer peer : peers) {
-            mainChannel.joinPeer(peer, createPeerOptions().setPeerRoles(EnumSet.of(Peer.PeerRole.ENDORSING_PEER, Peer.PeerRole.LEDGER_QUERY, Peer.PeerRole.CHAINCODE_QUERY, Peer.PeerRole.EVENT_SOURCE)));
+            }
 
+
+            storedChannel = new StoredChannel(channelName, mainChannel.serializeChannel());
+
+            storedChannelRepository.save(storedChannel);
+        } else {
+            mainChannel = hfClient.deSerializeChannel(storedChannel.getChannelInfo());
         }
 
-
         mainChannel.initialize();
+
     }
 
 
@@ -324,123 +376,129 @@ public class PlatformInit {
     private void loadAndInstantiateCC() throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException, IOException, ProposalException, ChaincodeEndorsementPolicyParseException, ExecutionException, InterruptedException {
 
 
-        class ChaincodeEventCapture { //A test class to capture chaincode events
-            final String handle;
-            final BlockEvent blockEvent;
-            final ChaincodeEvent chaincodeEvent;
+        if (hfClient.queryInstalledChaincodes(peers.get(0))
+                .stream().filter(
+                        chaincodeInfo ->
+                                chaincodeInfo.getName().equals(CHAIN_CODE_NAME)
+                ).count() == 0) {
 
-            ChaincodeEventCapture(String handle, BlockEvent blockEvent, ChaincodeEvent chaincodeEvent) {
-                this.handle = handle;
-                this.blockEvent = blockEvent;
-                this.chaincodeEvent = chaincodeEvent;
+            class ChaincodeEventCapture { //A test class to capture chaincode events
+                final String handle;
+                final BlockEvent blockEvent;
+                final ChaincodeEvent chaincodeEvent;
+
+                ChaincodeEventCapture(String handle, BlockEvent blockEvent, ChaincodeEvent chaincodeEvent) {
+                    this.handle = handle;
+                    this.blockEvent = blockEvent;
+                    this.chaincodeEvent = chaincodeEvent;
+                }
             }
-        }
 
-        Vector<ChaincodeEventCapture> chaincodeEvents = new Vector<>();
+            Vector<ChaincodeEventCapture> chaincodeEvents = new Vector<>();
 
-        Collection<ProposalResponse> responses;
+            Collection<ProposalResponse> responses;
 
-        String chaincodeEventListenerHandle = mainChannel.registerChaincodeEventListener(Pattern.compile(".*"),
-                Pattern.compile(Pattern.quote(EXPECTED_EVENT_NAME)),
-                (handle, blockEvent, chaincodeEvent) -> {
+            String chaincodeEventListenerHandle = mainChannel.registerChaincodeEventListener(Pattern.compile(".*"),
+                    Pattern.compile(Pattern.quote(EXPECTED_EVENT_NAME)),
+                    (handle, blockEvent, chaincodeEvent) -> {
 
-                    chaincodeEvents.add(new ChaincodeEventCapture(handle, blockEvent, chaincodeEvent));
+                        chaincodeEvents.add(new ChaincodeEventCapture(handle, blockEvent, chaincodeEvent));
 
-                    String es = blockEvent.getPeer() != null ? blockEvent.getPeer().getName() : blockEvent.getEventHub().getName();
-                    out("RECEIVED Chaincode event with handle: %s, chaincode Id: %s, chaincode event name: %s, "
-                                    + "transaction id: %s, event payload: \"%s\", from eventhub: %s",
-                            handle, chaincodeEvent.getChaincodeId(),
-                            chaincodeEvent.getEventName(),
-                            chaincodeEvent.getTxId(),
-                            new String(chaincodeEvent.getPayload()), es);
-                });
+                        String es = blockEvent.getPeer() != null ? blockEvent.getPeer().getName() : blockEvent.getEventHub().getName();
+                        out("RECEIVED Chaincode event with handle: %s, chaincode Id: %s, chaincode event name: %s, "
+                                        + "transaction id: %s, event payload: \"%s\", from eventhub: %s",
+                                handle, chaincodeEvent.getChaincodeId(),
+                                chaincodeEvent.getEventName(),
+                                chaincodeEvent.getTxId(),
+                                new String(chaincodeEvent.getPayload()), es);
+                    });
 
 
-        hfClient.setUserContext(userRepository.findByName(myOrgPeerAdminName));
+            hfClient.setUserContext(userRepository.findByName(myOrgPeerAdminName));
 
-        InstallProposalRequest installProposalRequest = hfClient.newInstallProposalRequest();
-        installProposalRequest.setChaincodeID(getChaincodeID());
+            InstallProposalRequest installProposalRequest = hfClient.newInstallProposalRequest();
+            installProposalRequest.setChaincodeID(getChaincodeID());
 
-        installProposalRequest.setChaincodeSourceLocation(Paths.get(LOCAL_PATH, CHAIN_CODE_FILEPATH).toFile());
+            installProposalRequest.setChaincodeSourceLocation(Paths.get(LOCAL_PATH, CHAIN_CODE_FILEPATH).toFile());
 
-        installProposalRequest.setChaincodeMetaInfLocation(new File(LOCAL_PATH + CHAIN_CODE_META_PATH));
+            installProposalRequest.setChaincodeMetaInfLocation(new File(LOCAL_PATH + CHAIN_CODE_META_PATH));
 
-        installProposalRequest.setChaincodeVersion(CHAIN_CODE_VERSION);
-        installProposalRequest.setChaincodeLanguage(CHAIN_CODE_LANG);
+            installProposalRequest.setChaincodeVersion(CHAIN_CODE_VERSION);
+            installProposalRequest.setChaincodeLanguage(CHAIN_CODE_LANG);
 
-        responses = hfClient.sendInstallProposal(installProposalRequest, mainChannel.getPeers());
+            responses = hfClient.sendInstallProposal(installProposalRequest, mainChannel.getPeers());
 
-        for (ProposalResponse response : responses) {
-            if (response.getStatus() == ProposalResponse.Status.SUCCESS) {
+            for (ProposalResponse response : responses) {
+                if (response.getStatus() == ProposalResponse.Status.SUCCESS) {
 
-            } else {
-                throw new ProposalException("Proposal request to peer failed!");
+                } else {
+                    throw new ProposalException("Proposal request to peer failed!");
+                }
             }
-        }
 
 
-        ///////////////
-        /// Send instantiation transaction to all peers
-        //// Instantiate chaincode.
-        InstantiateProposalRequest instantiateProposalRequest = hfClient.newInstantiationProposalRequest();
-        instantiateProposalRequest.setProposalWaitTime(DEPLOYWAITTIME);
-        instantiateProposalRequest.setChaincodeID(getChaincodeID());
-        instantiateProposalRequest.setChaincodeLanguage(CHAIN_CODE_LANG);
-        instantiateProposalRequest.setFcn("init");
-        instantiateProposalRequest.setArgs("NONE");
-        Map<String, byte[]> tm = new HashMap<>();
-        tm.put("HyperLedgerFabric", "InstantiateProposalRequest:JavaSDK".getBytes(UTF_8));
-        tm.put("method", "InstantiateProposalRequest".getBytes(UTF_8));
-        instantiateProposalRequest.setTransientMap(tm);
+            ///////////////
+            /// Send instantiation transaction to all peers
+            //// Instantiate chaincode.
+            InstantiateProposalRequest instantiateProposalRequest = hfClient.newInstantiationProposalRequest();
+            instantiateProposalRequest.setProposalWaitTime(DEPLOYWAITTIME);
+            instantiateProposalRequest.setChaincodeID(getChaincodeID());
+            instantiateProposalRequest.setChaincodeLanguage(CHAIN_CODE_LANG);
+            instantiateProposalRequest.setFcn("init");
+            instantiateProposalRequest.setArgs("NONE");
+            Map<String, byte[]> tm = new HashMap<>();
+            tm.put("HyperLedgerFabric", "InstantiateProposalRequest:JavaSDK".getBytes(UTF_8));
+            tm.put("method", "InstantiateProposalRequest".getBytes(UTF_8));
+            instantiateProposalRequest.setTransientMap(tm);
 
-        ChaincodeEndorsementPolicy chaincodeEndorsementPolicy = new ChaincodeEndorsementPolicy();
-        chaincodeEndorsementPolicy.fromYamlFile(new File(LOCAL_PATH + "//chaincodeendorsementpolicy.yaml"));
-        instantiateProposalRequest.setChaincodeEndorsementPolicy(chaincodeEndorsementPolicy);
+            ChaincodeEndorsementPolicy chaincodeEndorsementPolicy = new ChaincodeEndorsementPolicy();
+            chaincodeEndorsementPolicy.fromYamlFile(new File(LOCAL_PATH + "//chaincodeendorsementpolicy.yaml"));
+            instantiateProposalRequest.setChaincodeEndorsementPolicy(chaincodeEndorsementPolicy);
 
-        responses = mainChannel.sendInstantiationProposal(instantiateProposalRequest, mainChannel.getPeers());
+            responses = mainChannel.sendInstantiationProposal(instantiateProposalRequest, mainChannel.getPeers());
 
-        Collection<ProposalResponse> successful = new LinkedList<>();
+            Collection<ProposalResponse> successful = new LinkedList<>();
 
-        for (ProposalResponse response : responses) {
-            if (response.isVerified() && response.getStatus() == ProposalResponse.Status.SUCCESS) {
-                successful.add(response);
-            } else {
-                throw new ExecuteException(response.getMessage());
+            for (ProposalResponse response : responses) {
+                if (response.isVerified() && response.getStatus() == ProposalResponse.Status.SUCCESS) {
+                    successful.add(response);
+                } else {
+                    throw new ExecuteException(response.getMessage());
+                }
             }
+
+            //Specify what events should complete the interest in this transaction. This is the default
+            // for all to complete. It's possible to specify many different combinations like
+            //any from a group, all from one group and just one from another or even None(NOfEvents.createNoEvents).
+            // See. Channel.NOfEvents
+            Channel.NOfEvents nOfEvents = createNofEvents();
+            if (!mainChannel.getPeers(EnumSet.of(Peer.PeerRole.EVENT_SOURCE)).isEmpty()) {
+                nOfEvents.addPeers(mainChannel.getPeers(EnumSet.of(Peer.PeerRole.EVENT_SOURCE)));
+            }
+            if (!mainChannel.getEventHubs().isEmpty()) {
+                nOfEvents.addEventHubs(mainChannel.getEventHubs());
+            }
+
+
+            CompletableFuture<BlockEvent.TransactionEvent> transactionEventCompletableFuture =
+                    mainChannel.sendTransaction(
+                            successful,
+                            createTransactionOptions() //Basically the default options but shows it's usage.
+                                    .userContext(hfClient.getUserContext()) //could be a different user context. this is the default.
+                                    .shuffleOrders(false) // don't shuffle any orderers the default is true.
+                                    .orderers(mainChannel.getOrderers()) // specify the orderers we want to try this transaction. Fails once all Orderers are tried.
+                                    .nOfEvents(nOfEvents) // The events to signal the completion of the interest in the transaction
+                    );
+
+            BlockEvent.TransactionEvent transactionEvent = transactionEventCompletableFuture.get();
+
+            out("Finished instantiate transaction with transaction id %s", transactionEvent.getTransactionID());
         }
-
-        //Specify what events should complete the interest in this transaction. This is the default
-        // for all to complete. It's possible to specify many different combinations like
-        //any from a group, all from one group and just one from another or even None(NOfEvents.createNoEvents).
-        // See. Channel.NOfEvents
-        Channel.NOfEvents nOfEvents = createNofEvents();
-        if (!mainChannel.getPeers(EnumSet.of(Peer.PeerRole.EVENT_SOURCE)).isEmpty()) {
-            nOfEvents.addPeers(mainChannel.getPeers(EnumSet.of(Peer.PeerRole.EVENT_SOURCE)));
-        }
-        if (!mainChannel.getEventHubs().isEmpty()) {
-            nOfEvents.addEventHubs(mainChannel.getEventHubs());
-        }
-
-
-        CompletableFuture<BlockEvent.TransactionEvent> transactionEventCompletableFuture =
-                mainChannel.sendTransaction(
-                        successful,
-                        createTransactionOptions() //Basically the default options but shows it's usage.
-                                .userContext(hfClient.getUserContext()) //could be a different user context. this is the default.
-                                .shuffleOrders(false) // don't shuffle any orderers the default is true.
-                                .orderers(mainChannel.getOrderers()) // specify the orderers we want to try this transaction. Fails once all Orderers are tried.
-                                .nOfEvents(nOfEvents) // The events to signal the completion of the interest in the transaction
-                );
-
-        BlockEvent.TransactionEvent transactionEvent = transactionEventCompletableFuture.get();
-
-        out("Finished instantiate transaction with transaction id %s", transactionEvent.getTransactionID());
-
 
     }
 
 
-    private void add(String name) throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException, ProposalException, ExecutionException, InterruptedException {
+    private void add(String hashValue) throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException, ProposalException, ExecutionException, InterruptedException {
         hfClient.setUserContext(userRepository.findByName(myOrgPeerAdminName));
 
         ///////////////
@@ -450,7 +508,7 @@ public class PlatformInit {
         transactionProposalRequest.setChaincodeLanguage(CHAIN_CODE_LANG);
         transactionProposalRequest.setFcn("add");
         transactionProposalRequest.setProposalWaitTime(PROPOSALWAITTIME);
-        transactionProposalRequest.setArgs(name,myOrgName);
+        transactionProposalRequest.setArgs(hashValue, myOrgName);
 
         Collection<ProposalResponse> successful = new LinkedList<>();
 
@@ -469,7 +527,7 @@ public class PlatformInit {
 
         BlockEvent.TransactionEvent transactionEvent = transactionEventCompletableFuture.get();
 
-        out("Finished add(" + name + ") successfully. TxId: ", transactionEvent.getTransactionID());
+        out("Finished add(" + hashValue + ") successfully. TxId: {1}", transactionEvent.getTransactionID());
 
     }
 
