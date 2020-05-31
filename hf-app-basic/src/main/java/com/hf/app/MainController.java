@@ -6,11 +6,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 @Controller
 public class MainController {
 
-    @RequestMapping(path = "/check-student")
-    public static String checkOrSaveStudentName(String name) {
-        return "checkOrSaveStudentName";
-    }
-
     @RequestMapping(value = "/")
     public String index() {
         return "index";

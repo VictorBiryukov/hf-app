@@ -498,7 +498,7 @@ public class PlatformInit {
     }
 
 
-    private void add(String hashValue) throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException, ProposalException, ExecutionException, InterruptedException {
+    public void add(String hashValue) throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException, ProposalException, ExecutionException, InterruptedException {
         hfClient.setUserContext(userRepository.findByName(myOrgPeerAdminName));
 
         ///////////////
