@@ -16,17 +16,12 @@
 package com.hf.app.persistence.entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.hf.app.PlatformInit;
-import org.hyperledger.fabric.sdk.exception.InvalidArgumentException;
-import org.hyperledger.fabric.sdk.exception.ProposalException;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.Version;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
 
 
 @Entity
@@ -54,9 +49,6 @@ public class Student {
         setHashValue(null);
     }
 
-    @Autowired
-    PlatformInit platformInit;
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -72,8 +64,9 @@ public class Student {
     @Override
     public int hashCode() {
 
-        return Objects.hash(id, firstName, lastName, description, version);
+        return Objects.hash(firstName, lastName, description);
     }
+
 
     public Long getId() {
         return id;
@@ -113,14 +106,7 @@ public class Student {
 
     public void setHashValue(String hashValue) {
 
-
-        String currentHashValue = String.valueOf(hashCode());
-        try {
-            platformInit.add(currentHashValue);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        this.hashValue = String.valueOf(currentHashValue);
+        this.hashValue = String.valueOf(hashCode());
     }
 
     public Long getVersion() {

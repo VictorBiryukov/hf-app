@@ -140,14 +140,14 @@ public class PlatformInit {
         getOrConstructChannel(CHANNEL_NAME);
         loadAndInstantiateCC();
 
+/*
         studentRepository.save(new Student("Jon", "Jones", "Bones"));
         studentRepository.save(new Student("Dominick", "Reyes", "The Devastator"));
         studentRepository.save(new Student("Thiago", "Santos", "Maretta"));
         studentRepository.save(new Student("Jan", "Blachowicz", "Prince of Cieszyn"));
         studentRepository.save(new Student("Glover", "Teixeira", "Brazilian"));
         studentRepository.save(new Student("Anthony", "Smith", "Lionheart"));
-
-
+*/
 
     }
 
