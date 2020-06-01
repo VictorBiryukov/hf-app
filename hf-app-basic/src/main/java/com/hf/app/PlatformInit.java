@@ -2,7 +2,6 @@ package com.hf.app;
 
 import com.hf.app.persistence.entities.Organization;
 import com.hf.app.persistence.entities.StoredChannel;
-import com.hf.app.persistence.entities.Student;
 import com.hf.app.persistence.entities.User;
 import com.hf.app.persistence.repositories.OrganizationRepository;
 import com.hf.app.persistence.repositories.StoredChannelRepository;
@@ -57,7 +56,6 @@ public class PlatformInit {
     private final StudentRepository studentRepository;
 
 
-
     private final String myOrgName;
     private final String myOrgMspId;
 
@@ -67,6 +65,8 @@ public class PlatformInit {
     private final String myOrgUserAffiliation;
 
     private final String myOrgPeerAdminName;
+    private User myOrgPeerAdmin;
+
     private final String myOrgPeerAdminKeyDirectory;
     private final String myOrgPeerAdminCertFile;
 
@@ -499,7 +499,7 @@ public class PlatformInit {
 
 
     public void add(String hashValue) throws org.hyperledger.fabric.sdk.exception.InvalidArgumentException, ProposalException, ExecutionException, InterruptedException {
-        hfClient.setUserContext(userRepository.findByName(myOrgPeerAdminName));
+//        hfClient.setUserContext(userRepository.findByName(myOrgPeerAdminName));
 
         ///////////////
         /// Send transaction proposal to all peers
