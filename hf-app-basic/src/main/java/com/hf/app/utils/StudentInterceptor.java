@@ -4,14 +4,9 @@ import com.hf.app.PlatformInit;
 import com.hf.app.persistence.entities.Student;
 import org.hibernate.EmptyInterceptor;
 import org.hibernate.type.Type;
-import org.hyperledger.fabric.sdk.HFClient;
-import org.hyperledger.fabric.sdk.exception.InvalidArgumentException;
-import org.hyperledger.fabric.sdk.exception.ProposalException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 
 import java.io.Serializable;
-import java.util.concurrent.ExecutionException;
 
 
 public class StudentInterceptor extends EmptyInterceptor {
@@ -31,10 +26,9 @@ public class StudentInterceptor extends EmptyInterceptor {
         }
 
 
-
         if (platformInit != null) {
             try {
-            platformInit.add(((Student) entity).getHashValue());
+                platformInit.add(((Student) entity).getHashValue());
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
